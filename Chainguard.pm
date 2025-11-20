@@ -14,9 +14,14 @@ use base qw(PVE::LXC::Setup::Base);
 sub new {
     my ($class, $conf, $rootdir, $os_release) = @_;
 
-    # Verify systemd exists - required for Chainguard
-    die "systemd not found - Chainguard requires systemd\n"
-        if ! -f "$rootdir/usr/lib/systemd/systemd" && ! -f "$rootdir/lib/systemd/systemd";
+    # Check if this is an OCI container (has entrypoint defined)
+    my $is_oci_container = defined($conf->{entrypoint});
+
+    # Only require systemd for traditional LXC templates
+    if (!$is_oci_container) {
+        die "systemd not found - Chainguard requires systemd\n"
+            if ! -f "$rootdir/usr/lib/systemd/systemd" && ! -f "$rootdir/lib/systemd/systemd";
+    }
 
     my $version = $os_release->{VERSION_ID} || "unknown";
 
@@ -25,6 +30,7 @@ sub new {
         rootdir => $rootdir,
         version => $version,
         os_release => $os_release,
+        is_oci => $is_oci_container,
     };
 
     $conf->{ostype} = "chainguard";
@@ -41,6 +47,7 @@ sub template_fixup {
 
     # Chainguard uses systemd - no special fixup needed
     # systemd handles device management automatically
+    # OCI containers don't need fixup either
 }
 
 sub setup_init {
@@ -49,10 +56,14 @@ sub setup_init {
     # Chainguard uses systemd
     # systemd handles getty spawning automatically via getty@.service template
     # No manual inittab configuration needed
+    # OCI containers use their entrypoint, not init
 }
 
 sub setup_network {
     my ($self, $conf) = @_;
+
+    # Skip network setup for OCI containers - they use host-managed networking
+    return if $self->{is_oci};
 
     # Parse network configuration from container config
     my $networks = {};
@@ -120,6 +131,9 @@ sub setup_network {
 sub setup_systemd_networkd {
     my ($self) = @_;
 
+    # Skip for OCI containers
+    return if $self->{is_oci};
+
     # Ensure systemd-networkd directory exists
     $self->ct_mkdir("/etc/systemd/network", 0755);
 }
@@ -129,6 +143,7 @@ sub setup_systemd_console {
 
     # systemd handles console automatically via getty@.service
     # Nothing special needed for Chainguard
+    # OCI containers don't need console setup
 }
 
 sub set_timezone {
@@ -173,6 +188,9 @@ sub set_hostname {
 sub set_dns {
     my ($self, $conf) = @_;
 
+    # Skip for OCI containers - they use host-managed networking
+    return if $self->{is_oci};
+
     my $searchdomains = $conf->{searchdomain} || "";
     my $nameservers = $conf->{nameserver} || "";
 
@@ -202,6 +220,9 @@ sub set_dns {
 sub setup_sshd {
     my ($self) = @_;
 
+    # Skip for OCI containers - they don't run system services
+    return if $self->{is_oci};
+
     # Enable SSH server if it exists
     my $sshd_service = "/usr/lib/systemd/system/sshd.service";
     my $ssh_service = "/usr/lib/systemd/system/ssh.service";
@@ -217,6 +238,9 @@ sub setup_sshd {
 
 sub setup_securetty {
     my ($self) = @_;
+
+    # Skip for OCI containers
+    return if $self->{is_oci};
 
     # Configure securetty to allow console login via pct console
     my $securetty_file = "/etc/securetty";
@@ -239,13 +263,17 @@ sub setup_securetty {
 sub post_create_hook {
     my ($self, $conf, $root_password, $ssh_keys) = @_;
 
-    # Setup network configuration
+    # Skip systemd-based setup for OCI containers
+    # OCI containers use their entrypoint and host-managed networking
+    if ($self->{is_oci}) {
+        # Only call parent for basic setup (passwords, SSH keys if applicable)
+        $self->SUPER::post_create_hook($conf, $root_password, $ssh_keys);
+        return;
+    }
+
+    # Traditional LXC template setup with systemd
     $self->setup_network($conf);
-
-    # Setup console access
     $self->setup_securetty();
-
-    # Setup SSH if requested
     $self->setup_sshd();
 
     # Call parent implementation for standard setup

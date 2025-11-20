@@ -16,7 +16,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Version info
-VERSION="2.0"
+VERSION="3.0"
 DATE=$(date +%Y%m%d)
 
 # Package details

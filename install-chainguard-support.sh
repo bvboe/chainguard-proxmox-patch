@@ -193,6 +193,19 @@ patch_setup_pm() {
             exit 1
         fi
     fi
+
+    # Add wolfi alias for OCI image support
+    if grep -q "wolfi => 'chainguard'" "$SETUP_PM"; then
+        print_warning "Setup.pm already contains wolfi alias, skipping"
+    else
+        if grep -q "almalinux => 'centos'," "$SETUP_PM"; then
+            sed -i "/almalinux => 'centos',/a \    wolfi => 'chainguard'," "$SETUP_PM"
+            print_success "Added wolfi to chainguard alias for OCI support"
+        else
+            print_error "Could not find alias hash in Setup.pm"
+            exit 1
+        fi
+    fi
 }
 
 patch_config_pm() {

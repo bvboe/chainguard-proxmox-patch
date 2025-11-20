@@ -2,15 +2,17 @@
 
 Native Chainguard OS support patch for Proxmox VE, enabling full integration of Chainguard containers with proper OS recognition, networking, and system configuration.
 
-**Version**: 2.0
+**Version**: 3.0
+**Date**: 2025-11-20
 **Tested on**: Proxmox VE 9.1.1
 
 ---
 
 ## Overview
 
-This patch adds native Chainguard OS support to Proxmox VE, allowing you to create and manage Chainguard LXC containers with:
+This patch adds native Chainguard OS support to Proxmox VE, allowing you to create and manage both traditional Chainguard LXC containers and OCI container images:
 
+### Traditional LXC Templates (with systemd)
 - ✅ Proper OS recognition (`ostype: chainguard`)
 - ✅ DHCP and static IP networking via systemd-networkd
 - ✅ DNS configuration via systemd-resolved
@@ -18,6 +20,14 @@ This patch adds native Chainguard OS support to Proxmox VE, allowing you to crea
 - ✅ SSH server enablement (when present)
 - ✅ cgroupv2 support
 - ✅ Full systemd integration
+
+### OCI Container Images (Chainguard & Wolfi)
+- ✅ Wolfi and Chainguard OCI image support
+- ✅ Automatic entrypoint detection and execution
+- ✅ Host-managed networking (DHCP)
+- ✅ Environment variable injection
+- ✅ Single-process container mode
+- ✅ Compatible with Chainguard and Wolfi minimal images
 
 ---
 
@@ -28,12 +38,15 @@ The installer modifies three Proxmox files:
 1. **`/usr/share/perl5/PVE/LXC/Setup.pm`**
    - Adds `use PVE::LXC::Setup::Chainguard;` import
    - Registers Chainguard plugin in plugins hash
+   - Adds `wolfi => 'chainguard'` alias for Wolfi OS
 
 2. **`/usr/share/perl5/PVE/LXC/Config.pm`**
    - Adds `chainguard` to ostype enumeration
 
 3. **`/usr/share/perl5/PVE/LXC/Setup/Chainguard.pm`** (NEW)
-   - Complete plugin module with systemd-based configuration
+   - Complete plugin module with systemd-based configuration for LXC templates
+   - OCI-aware mode for minimal container images
+   - Automatic detection of OCI vs traditional LXC containers
 
 All original files are backed up with timestamps before modification.
 
@@ -100,7 +113,27 @@ pct create 102 local:vztmpl/chainguard-*.tar.zst \
   --ssh-public-keys ~/.ssh/id_rsa.pub
 ```
 
-### 3. Start and Access
+### 3. Using OCI Container Images
+
+The patch also supports Chainguard and Wolfi OCI container images:
+
+```bash
+# Create from Chainguard/Wolfi OCI image
+pct create 200 local:vztmpl/nginx_latest.tar \
+  --hostname nginx \
+  --memory 512 \
+  --cores 1 \
+  --net0 name=eth0,bridge=vmbr0,ip=dhcp \
+  --storage local-lvm \
+  --unprivileged 1
+
+# Start the container (runs the OCI entrypoint automatically)
+pct start 200
+```
+
+**Note:** OCI images use host-managed networking and run their defined entrypoint as PID 1. They don't require systemd and work with minimal Wolfi/Chainguard images.
+
+### 4. Start and Access
 
 ```bash
 # Start the container
@@ -398,10 +431,10 @@ Proxmox uses a plugin system for OS-specific container setup. Each OS has:
 
 ## Known Limitations
 
-- **Does not support Chainguard OCI images** - Only LXC container templates are supported
 - Requires one-time Proxmox modification (not a standard package)
 - Proxmox updates may require reinstalling the patch
-- Minimal Chainguard images may not include SSH server
+- Minimal Chainguard/Wolfi OCI images may not include SSH server or standard utilities
+- OCI containers use host-managed networking (no internal network configuration)
 
 ---
 
@@ -455,6 +488,15 @@ This creates `proxmox-chainguard-support.tar.gz` with:
 ---
 
 ## Changelog
+
+**Version 3.0 (2025-11-20)**
+- ✅ **OCI Container Support** - Full support for Chainguard and Wolfi OCI images
+- ✅ Added `wolfi => 'chainguard'` alias for Wolfi OS detection
+- ✅ OCI-aware mode: automatic detection of OCI vs traditional LXC containers
+- ✅ Host-managed networking for OCI containers
+- ✅ Skips systemd requirements for minimal OCI images
+- ✅ Tested with Chainguard nginx and postgres OCI images
+- ✅ Updated installer to add wolfi alias automatically
 
 **Version 2.0 (2025-11-18)**
 - ✅ Full implementation with working DHCP and static IP
