@@ -217,25 +217,6 @@ sub set_dns {
     $self->ct_file_set_contents("/etc/systemd/resolved.conf.d/pve.conf", $content);
 }
 
-sub setup_sshd {
-    my ($self) = @_;
-
-    # Skip for OCI containers - they don't run system services
-    return if $self->{is_oci};
-
-    # Enable SSH server if it exists
-    my $sshd_service = "/usr/lib/systemd/system/sshd.service";
-    my $ssh_service = "/usr/lib/systemd/system/ssh.service";
-
-    if (-f $self->{rootdir} . $sshd_service) {
-        $self->ct_symlink($sshd_service,
-                          "/etc/systemd/system/multi-user.target.wants/sshd.service");
-    } elsif (-f $self->{rootdir} . $ssh_service) {
-        $self->ct_symlink($ssh_service,
-                          "/etc/systemd/system/multi-user.target.wants/ssh.service");
-    }
-}
-
 sub setup_securetty {
     my ($self) = @_;
 
@@ -274,7 +255,6 @@ sub post_create_hook {
     # Traditional LXC template setup with systemd
     $self->setup_network($conf);
     $self->setup_securetty();
-    $self->setup_sshd();
 
     # Call parent implementation for standard setup
     $self->SUPER::post_create_hook($conf, $root_password, $ssh_keys);

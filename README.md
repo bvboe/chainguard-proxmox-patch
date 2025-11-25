@@ -2,8 +2,8 @@
 
 Native Chainguard OS support patch for Proxmox VE, enabling full integration of Chainguard containers with proper OS recognition, networking, and system configuration.
 
-**Version**: 3.0
-**Date**: 2025-11-20
+**Version**: 4.0
+**Date**: 2025-11-25
 **Tested on**: Proxmox VE 9.1.1
 
 ---
@@ -17,7 +17,6 @@ This patch adds native Chainguard OS support to Proxmox VE, allowing you to crea
 - ✅ DHCP and static IP networking via systemd-networkd
 - ✅ DNS configuration via systemd-resolved
 - ✅ Password and SSH key authentication
-- ✅ SSH server enablement (when present)
 - ✅ cgroupv2 support
 - ✅ Full systemd integration
 
@@ -208,7 +207,6 @@ pct exec 100 -- python3 --version
 - **Device Management**: Automatic via systemd-udevd
 - **Console**: Handled by getty@.service with automatic securetty configuration
 - **cgroupv2**: Enabled for modern resource management
-- **SSH**: Automatically enables sshd.service if present
 
 ### Authentication
 
@@ -371,14 +369,11 @@ pct exec <VMID> -- ip addr show eth0
 pct exec <VMID> -- systemctl restart systemd-networkd
 ```
 
-### SSH Not Available
-
-Most minimal Chainguard images don't include SSH server by default.
+### Alternatives if SSH is not available
 
 **Alternatives:**
 - Use `pct console <VMID>` for console access
 - Use `pct exec <VMID> -- <command>` to run commands
-- Install openssh-server if APK repositories are configured
 
 ### Installation Fails
 
@@ -423,9 +418,10 @@ Proxmox uses a plugin system for OS-specific container setup. Each OS has:
 - Checks if `$ip =~ m|/|` (contains CIDR notation)
 - Extracts address and gateway from parsed config
 
-**SSH Enablement:**
-- Checks for sshd.service or ssh.service in `/usr/lib/systemd/system/`
-- Creates symlink in `/etc/systemd/system/multi-user.target.wants/`
+**SSH Handling:**
+- SSH availability depends on the container image configuration
+- Images with SSH pre-enabled will have SSH available after boot
+- Use `pct console` for direct console access regardless of SSH status
 
 ---
 
@@ -488,6 +484,11 @@ This creates `proxmox-chainguard-support.tar.gz` with:
 ---
 
 ## Changelog
+
+**Version 4.0 (2025-11-25)**
+- ✅ **Removed automatic SSH enablement** - Container images now manage their own SSH configuration
+- ✅ Aligns with standard Proxmox OS plugin behavior
+- ✅ Simpler codebase with less assumptions about container contents
 
 **Version 3.0 (2025-11-20)**
 - ✅ **OCI Container Support** - Full support for Chainguard and Wolfi OCI images
